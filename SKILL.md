@@ -92,7 +92,7 @@ For any unfamiliar Fusion API class or method, verify the signature against the 
 python "<skill-directory>/scripts/fusion_api_lookup.py" ClassName.methodName
 ```
 
-Read `references/fusion_api_research.md` when using temporary BRep geometry, fitted splines, base features, non-trivial booleans, threads, sketch text, or when a Fusion runtime error needs diagnosis. Cross-check official Autodesk documentation for semantics and retirement notices, while using the local installed stubs for the exact Python signature. A method remaining in the stubs can be backward-compatible but retired; use Autodesk's current replacement in new scripts.
+Read `references/fusion_advanced_geometry.md` before using temporary BRep geometry, base features, non-trivial booleans, or sketch text. Read `references/fusion_api_research.md` when using fitted splines or threads, or when a Fusion runtime error needs diagnosis. Cross-check official Autodesk documentation for semantics and retirement notices, while using the local installed stubs for the exact Python signature. A method remaining in the stubs can be backward-compatible but retired; use Autodesk's current replacement in new scripts.
 
 After generating or materially editing a script, run the bundled static preflight:
 
@@ -107,10 +107,10 @@ Key conventions for every generated script:
 - **Build in `design.rootComponent` by default.** Do not call `root.occurrences.addNewComponent(...)` unless the user explicitly needs a real multi-component assembly; Fusion Part Design documents can reject new components with "Part Design documents can only contain one component." For two-piece printable tools, create multiple named bodies in the root component instead.
 - **Make cut planes intersect the body being cut.** A cut sketch on the top of a raised pad will fail with "No target body found" if the hole is outside that pad. For through-holes in the base plate, sketch on the base top face/plane or use a symmetric cut from a plane that passes through the target material.
 - **Clear the complete surface envelope for radial holes.** On tapered, curved, or tilted bodies, size the cut from the maximum exterior envelope across the whole aperture, then extend it deliberately beyond the exterior and into the bore. A cut based only on the surface radius at the hole centre can leave part of the mouth covered. Keep clamp collars or bosses distinct from structural ribs when that improves access and makes the load path easier to audit. See `references/fusion_api_patterns.md`.
-- **Preserve measured interfaces from reference geometry.** Recover hole pitch, diameter, flange bounds, thickness, and keyed profiles from the supplied artifact before changing surrounding structure. Compare the script's derived values with that ledger and assert critical distances. See `references/fusion_api_patterns.md`.
+- **Preserve measured interfaces from reference geometry.** Recover hole pitch, diameter, flange bounds, thickness, and keyed profiles from the supplied artifact before changing surrounding structure. Compare the script's derived values with that ledger and assert critical distances. See `references/fusion_interfaces_and_fit.md`.
 - **Reconcile reference interfaces explicitly.** Before approving a redesign, map every preserved interface value as `reference artifact -> script parameter/derived value -> difference`. Overall bounding boxes are not a substitute for hole centres, diameters, keyed vertices, or seating planes. If an interface cannot be extracted, mark it unverified and block print approval rather than saying only to check it later.
 - **Derive stops from seated datums, not overall extents.** Name the outer face, inner panel face, seating plane, body end, relief start, and both faces of every stop. Calculate each position independently and assert non-intersection plus intended play; include the stop's own thickness when deriving the overall body length.
-- **Audit threaded collars as both an axial and radial stack.** Keep the female lip-to-thread setback, male lead-in, helix path height, swept-profile overhang, shoulder position, pass-through bore, and thread-root wall as independent parameters. Once a labeled coupon proves diameter and pitch, preserve them; fix a closed-up assembly gap with lead-in, runout, or neck height, and size the bore from measured printed error plus functional clearance. See `references/fusion_api_patterns.md`.
+- **Audit threaded collars as both an axial and radial stack.** Keep the female lip-to-thread setback, male lead-in, helix path height, swept-profile overhang, shoulder position, pass-through bore, and thread-root wall as independent parameters. Once a labeled coupon proves diameter and pitch, preserve them; fix a closed-up assembly gap with lead-in, runout, or neck height, and size the bore from measured printed error plus functional clearance. See `references/fusion_interfaces_and_fit.md`.
 - **Report numeric margins.** Evaluate stop clearance, retaining overlap, wall around pilots, cover play, and insertion clearance as signed distances. A negative margin is a collision; do not hide it inside a generic verification checklist.
 - **Use stepped retaining bezels when mating access and capture conflict.** If an opening must be smaller than the retained shoulder but an external mate must still reach the connector, cut a larger pocket from behind and leave only the required thin front lip. Verify insertion depth as well as width and height.
 - **Datum gravity-supported parts from their support surface.** Do not distribute clearance symmetrically around a part that will rest on a floor: unused bottom clearance becomes top play and shifts the mating feature. Specify lateral, top, and axial clearances separately.
@@ -122,8 +122,8 @@ Key conventions for every generated script:
 - **End with a confirmation `messageBox`** that summarises what was built (dimensions, hole counts) so the user gets immediate feedback that the script succeeded.
 - **Use fitted splines or arcs for organic/OEM outlines** such as automotive clips, molded plastic hooks, handles, rounded covers, and ergonomic shapes. Do not approximate these visible outlines with chunky polygon point loops unless the part is intentionally faceted. In Fusion Python, use `sketch.sketchCurves.sketchFittedSplines.add(fit_points)` and set `spline.isClosed = True` for closed smooth profiles.
 - **Use TemporaryBRepManager for freeform solids** such as spheres, rounded ribs, sealed internal pockets, compound cutters, and geometry where ordinary cut extrudes are likely to miss the target body. Check boolean return values and persist temporary bodies through a base feature.
-- **Do not reuse the edit-only body returned while a BaseFeature is active.** After `finishEdit()`, retrieve `base_feature.bodies.item(0)` and use that result body for combines. See `references/fusion_api_patterns.md` for the safe persistence helper.
-- **Treat sketch text and curved-body engraving as fragile geometry.** Use simple static fonts, finish all sketch edits before resolving profiles, split mixed text/profile booleans into independent features, and carry forward each feature's result body. Read the branding section in `references/fusion_api_patterns.md` before scripting text on a curved part.
+- **Do not reuse the edit-only body returned while a BaseFeature is active.** After `finishEdit()`, retrieve `base_feature.bodies.item(0)` and use that result body for combines. See `references/fusion_advanced_geometry.md` for the safe persistence helper.
+- **Treat sketch text and curved-body engraving as fragile geometry.** Use simple static fonts, finish all sketch edits before resolving profiles, split mixed text/profile booleans into independent features, and carry forward each feature's result body. Read the engraving section in `references/fusion_advanced_geometry.md` before scripting text on a curved part.
 - **Make calibration and production explicit modes.** Mark near-identical gauges physically, record the selected fit in the production parameter, and ensure the final run path creates only final printable solids.
 - **Review the layer-zero topology.** If a thin internal sleeve or tower is disconnected from the surrounding body for many layers, add two-layer breakaway tabs that avoid latch slots, keyways, and other mating features.
 - **Audit the directed layer stack before recommending orientation.** Do not automatically put the widest end on the bed. Trace the exterior and every internal radius from layer zero upward, then use a brim to stabilize the orientation with the cleanest unsupported geometry.
@@ -172,8 +172,19 @@ See `references/fusion_api_patterns.md` for:
 - Sketch / extrude / hole / fillet patterns
 - Radial set-screw holes, clamp collars, and full surface-envelope clearance
 - The world-to-sketch coordinate transform helper (critical for placing features correctly on construction planes)
-- Common API pitfalls and how to avoid them
-- BaseFeature result-body lifetime, sketch-text engraving, ASM boolean failures, threaded-collar fit, fit gauges, and breakaway print supports
+- Standard body combines and feature assertions
+
+See `references/fusion_advanced_geometry.md` for:
+- Temporary BRep and BaseFeature result-body lifetime
+- Sketch-text engraving and ASM boolean failures
+
+See `references/fusion_interfaces_and_fit.md` for:
+- Mating envelopes, reference-dimension provenance, and axial datums
+- Threaded-collar fit, retaining bezels, gravity datums, and fit gauges
+
+See `references/fusion_printability.md` for:
+- Layer-zero topology, breakaway supports, and print orientation
+- Printable-body accounting, common pitfalls, and worked-example hygiene
 
 See `references/fusion_api_research.md` for:
 - How to inspect the installed Autodesk Python stubs
