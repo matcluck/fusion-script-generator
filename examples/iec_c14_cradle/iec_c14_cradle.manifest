@@ -1,0 +1,7 @@
+{
+  "autodeskProduct": "Fusion360",
+  "type": "script",
+  "id": "iec_c14_cradle",
+  "supportedOS": "windows|mac",
+  "description": "IEC C14 cradle example"
+}

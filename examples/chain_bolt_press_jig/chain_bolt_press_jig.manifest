@@ -1,0 +1,7 @@
+{
+  "autodeskProduct": "Fusion360",
+  "type": "script",
+  "id": "chain_bolt_press_jig",
+  "supportedOS": "windows|mac",
+  "description": "Chain press-jig example"
+}

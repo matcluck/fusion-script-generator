@@ -179,3 +179,14 @@ See `references/fusion_api_research.md` for:
 - How to inspect the installed Autodesk Python stubs
 - Official Autodesk documentation entry points
 - Temporary BRep and boolean-operation rules
+
+## Examples
+
+Read only the example closest to the requested geometry:
+
+- [`examples/speaker_stand_flange/speaker_stand_flange.py`](examples/speaker_stand_flange/speaker_stand_flange.py) for a tilted revolved socket, structural ribs, radial clamp hole, recessed mounting holes, and final bounding-box assertions.
+- [`examples/iec_c14_cradle/iec_c14_cradle.py`](examples/iec_c14_cradle/iec_c14_cradle.py) for a measured mating interface, stepped retention, an open installation path, separate cover, and explicit printable-body accounting.
+- [`examples/gpu_air_guide/gpu_air_guide.py`](examples/gpu_air_guide/gpu_air_guide.py) for multi-station lofts, hollow ducts, body combines, ribs, mounting features, and fitted-path text.
+- [`examples/chain_bolt_press_jig/chain_bolt_press_jig.py`](examples/chain_bolt_press_jig/chain_bolt_press_jig.py) for a two-part jig, rounded profiles, pockets from opposing faces, hardware clearances, and parameter-margin checks.
+
+Treat example dimensions as illustrative. Re-interview the user, derive the new part's interfaces, and copy only relevant patterns. Each example has a matching manifest in the same folder.
