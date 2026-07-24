@@ -1,0 +1,4 @@
+interface:
+  display_name: "Autodesk Fusion AI Script Generator"
+  short_description: "Generate parametric Fusion 360 scripts"
+  default_prompt: "Use $autodesk-fusion-script-generator to design a 3D-printable part and create a ready-to-run Autodesk Fusion 360 Python script."

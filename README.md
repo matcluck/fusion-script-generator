@@ -1,8 +1,8 @@
-# Fusion Script Generator
+# Autodesk Fusion AI Script Generator
 
 AI-powered parametric CAD script generation for Autodesk Fusion 360.
 
-This tool interviews you about a part you want to 3D model, then generates a parametric Python script that builds it directly in Fusion 360. It handles the "gotchas" of the Fusion API and ensures your designs are ready to run.
+This tool interviews you about a part you want to 3D model, then generates a parametric Python script for you to run manually in Fusion 360. It handles the "gotchas" of the Fusion API and prepares the matching script manifest, but it does not launch or control Fusion.
 
 ## Features
 
@@ -16,15 +16,12 @@ This tool interviews you about a part you want to 3D model, then generates a par
 1.  **Interview**: The tool asks about the purpose, shape, critical dimensions, and features of your part.
 2.  **Planning**: A geometric decomposition plan is created and verified with you.
 3.  **Generation**: A Python script is generated using the Fusion 360 API.
-4.  **Handoff**: The script is saved to your configured Fusion scripts folder.
+4.  **Handoff**: The script is saved to your configured Fusion scripts folder for you to run in Fusion.
 5.  **Iteration**: Tweak dimensions by editing the parameters in the generated script or asking the tool for modifications.
 
 ## Configuration
 
-The tool is configured to write scripts to:
-`~/FusionScripts/`
-
-Each script is placed in a subfolder of the same name to comply with Fusion 360's loading requirements.
+The skill asks for the user's Fusion scripts directory before writing files. With the user's explicit approval, it can persist that directory in the platform-standard local configuration file. Each script is placed in a same-named subfolder with its Python file and manifest, as required by Fusion 360's script loader.
 
 ## Getting Started
 
