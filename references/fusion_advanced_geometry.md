@@ -77,6 +77,14 @@ For an outlined frame, `profile.profileLoops.count == 2` is often a useful predi
 - Define visual gaps numerically. Do not rely only on nominal path endpoints; compute logo bounds, text bounds, and inter-item spacing.
 - Decide the colour method before modeling. Debossed text is ideal for paint filling. Sideways lettering that spans many Z layers is expensive in an AMS; use separate shallow inlay bodies only when true multicolour output is worth the repeated swaps and purge.
 
+### Model true multicolour branding explicitly
+
+- Use a height-based downstream tool change only when all geometry above one exact Z boundary should use the new colour. Unsliced slicer views commonly show the whole body in its assigned base colour, so do not use this method when pre-slice colour visibility or per-part remapping matters.
+- Prefer separate named backing and lettering/inlay bodies for true AMS branding. Keep them aligned in the CAD handoff and export one neutral mesh per printable colour body.
+- Avoid one disconnected body per glyph. Join raised glyphs with a deliberate visible stencil bridge, underline, frame, or scanner line that intersects every glyph, then assert that the feature produces exactly one lettering solid. A connector can be part of the visual design rather than a hidden manufacturing artifact.
+- When splitting one printable body into several, update every contract surface together: `printable_roles`, exact body names, expected count, print orientations, export filenames, runtime assertions, return metadata, and user-facing body summary.
+- Use small numeric tolerances for bounding-box assertions. Fusion can report a nominal 1.2 mm body as `1.199999999999992 mm`; reject material geometry errors, not floating-point noise.
+
 ### Split compound branding booleans
 
 Do not send a mixed collection of an outlined logo profile and several `SketchText` objects into one curved-body cut. Fusion can fail the entire operation with `ASM_INCONS_REL`. Cut one profile or text object per feature and pass the latest result body into the next cut.
@@ -124,4 +132,3 @@ def cut_branding_entity(root, target_body, plane, entity, depth, name):
 ```
 
 The negative `ToEntity` offset above is intended to continue from the near exterior face into the body. Derive direction from the actual plane geometry and verify material removal; do not trust an assumed construction-plane normal or offset sign.
-

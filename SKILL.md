@@ -1,11 +1,22 @@
 ---
 name: autodesk-fusion-script-generator
-description: Generate or refine parametric Autodesk Fusion 360 Python scripts for 3D-printable parts. Use when a user asks for a Fusion script, wants a physical part modelled in Fusion, or wants an existing Fusion Python script updated; do not use for general CAD advice or interactive Fusion work without a script deliverable.
+description: Generate or refine parametric Autodesk Fusion 360 Python scripts for 3D-printable parts, including named printable bodies, neutral mesh exports, and CAD-side print-orientation intent. Use when a user asks for a Fusion script, wants a physical part modelled in Fusion, or wants an existing Fusion Python script updated; do not use for general CAD advice, interactive Fusion work without a script deliverable, or Bambu Studio plate/AMS/project packaging.
 ---
 
 # Autodesk Fusion AI Script Generator
 
-Generate parametric Autodesk Fusion 360 Python scripts from a natural-language description of a part. Save or hand off the resulting files for the user to run manually in Fusion. This skill does not launch Fusion or execute scripts inside it.
+Generate parametric Autodesk Fusion 360 Python scripts from a natural-language description of a part. Save the files and, when the opt-in Codex Fusion Runner is active in an open Fusion session, run an autonomous edit-test-diagnose loop. The skill does not launch Fusion.
+
+## Slicer boundary
+
+Own CAD geometry, printable-body names, geometry validation, neutral per-body mesh exports, and suggested physical orientation. Stop there.
+
+When the user also wants a slicer-ready project:
+
+- Export one neutral 3MF or STL per printable body.
+- Write a slicer-neutral `printable_manifest.json` using `references/printable_handoff.md`.
+- Do not assign AMS slots, Bambu filament presets, Bambu plate coordinates, custom layer G-code, or call Bambu Studio from the Fusion script.
+- Hand the neutral exports to `$bambu-studio-project-builder`, which owns Bambu packaging and validation.
 
 ## Output location
 
@@ -100,7 +111,31 @@ After generating or materially editing a script, run the bundled static prefligh
 python "<skill-directory>/scripts/preflight_fusion_script.py" "<fusion-script-or-folder>"
 ```
 
-Preflight checks Python syntax, the manifest, inspectable Autodesk API symbols, retired calls, and the literal `BUILD_SPEC`. It does not execute Fusion or validate the resulting geometry. Report that runtime validation remains pending until the user runs the script in Fusion.
+Preflight checks Python syntax, the manifest, inspectable Autodesk API symbols, retired calls, and the literal `BUILD_SPEC`. It does not execute Fusion or validate the resulting geometry.
+
+### Autonomous runtime loop
+
+After preflight, check the opt-in Fusion runner before asking the user to run the script:
+
+```text
+python "<skill-directory>/scripts/fusion_runtime_bridge.py" --scripts-root "<fusion-scripts-directory>" status
+```
+
+When it reports `active: true`, submit the exact preflighted script and wait for structured Fusion results:
+
+```text
+python "<skill-directory>/scripts/fusion_runtime_bridge.py" --scripts-root "<fusion-scripts-directory>" run "<script.py>" --timeout 180
+```
+
+Treat any non-success status, traceback, unhealthy feature, missing body, `contract_issues` entry, or `capture_error` as a failed runtime test. Diagnose it, patch the script, rerun preflight, and resubmit. Continue until the runner reports success or a failure requires a physical measurement or user decision. Do not ask the user to copy tracebacks that the runner can collect.
+
+The runner executes only matching `<folder>/<folder>.py` scripts directly beneath its configured Scripts root, requires a matching manifest and submitted SHA-256, and reports generated-body and feature health. It also returns 1200 x 900 PNG captures for isometric, top, bottom, front, rear, right, left, and primary-body underside views while restoring the user's original camera and body visibility. It does not save, close, export, or print the design.
+
+Runner v1.3 and newer supervise their queue watcher. A dead watcher, a stalled heartbeat, or a transient synced-filesystem write failure triggers an in-process worker replacement; abandoned processing requests are requeued after a safety timeout. The bridge allows a short recovery grace window before declaring a v1.3 runner inactive. Use the structured `watcher_restart_count`, `last_recovery_reason`, and `last_watcher_error` status fields when diagnosing repeated recoveries.
+
+After every successful run, open every path in `captures` with the local image-viewing tool. Inspect the overall silhouette and proportions, every mating opening visible from the relevant face, branding direction and legibility, part overlap, exterior artifacts, and the primary-body underside/interior. Treat a visually wrong result as a failed iteration even when the body contract and feature health pass. Do not claim visual validation from body metadata alone.
+
+When the runner is installed but inactive, ask the user for the one-time action: Fusion -> Utilities -> Scripts and Add-Ins -> Add-Ins -> `codex_fusion_runner` -> Run. Its manifest enables startup thereafter. When it is unavailable, fall back to manual runtime validation and say so explicitly.
 
 Key conventions for every generated script:
 
@@ -119,16 +154,19 @@ Key conventions for every generated script:
 - **Add a literal `BUILD_SPEC` contract near the top.** Include units, coordinate direction, generated-body prefixes, exact printable body names/count, and per-body print orientation. Keep coordinate and body ownership decisions explicit enough that another model can audit the geometry without reconstructing the interview.
 - **Use cm everywhere** (Fusion's internal unit). Convert from mm in comments only.
 - **Wrap everything in `def run(context):` with `try`/`except`** that surfaces errors via `ui.messageBox` - Fusion swallows raw Python tracebacks otherwise.
+- **Support the autonomous runner.** At the start of `run`, set `codex_automation = isinstance(context, dict) and bool(context.get("codex_automation"))`. Suppress success dialogs in that mode, return a small serializable result dictionary, and re-raise caught exceptions when `codex_automation` is true. Preserve normal `messageBox` behavior for manual runs.
 - **End with a confirmation `messageBox`** that summarises what was built (dimensions, hole counts) so the user gets immediate feedback that the script succeeded.
 - **Use fitted splines or arcs for organic/OEM outlines** such as automotive clips, molded plastic hooks, handles, rounded covers, and ergonomic shapes. Do not approximate these visible outlines with chunky polygon point loops unless the part is intentionally faceted. In Fusion Python, use `sketch.sketchCurves.sketchFittedSplines.add(fit_points)` and set `spline.isClosed = True` for closed smooth profiles.
 - **Use TemporaryBRepManager for freeform solids** such as spheres, rounded ribs, sealed internal pockets, compound cutters, and geometry where ordinary cut extrudes are likely to miss the target body. Check boolean return values and persist temporary bodies through a base feature.
 - **Do not reuse the edit-only body returned while a BaseFeature is active.** After `finishEdit()`, retrieve `base_feature.bodies.item(0)` and use that result body for combines. See `references/fusion_advanced_geometry.md` for the safe persistence helper.
 - **Treat sketch text and curved-body engraving as fragile geometry.** Use simple static fonts, finish all sketch edits before resolving profiles, split mixed text/profile booleans into independent features, and carry forward each feature's result body. Read the engraving section in `references/fusion_advanced_geometry.md` before scripting text on a curved part.
+- **Model true multicolour branding as explicit bodies.** When backing and lettering must receive independently visible slicer colours, create separate named printable solids rather than relying on a downstream height swap. Connect otherwise disconnected glyphs with an intentional stencil bridge, frame, underline, or scanner line, and update the complete body/export contract. See `references/fusion_advanced_geometry.md`.
 - **Make calibration and production explicit modes.** Mark near-identical gauges physically, record the selected fit in the production parameter, and ensure the final run path creates only final printable solids.
 - **Review the layer-zero topology.** If a thin internal sleeve or tower is disconnected from the surrounding body for many layers, add two-layer breakaway tabs that avoid latch slots, keyways, and other mating features.
 - **Audit the directed layer stack before recommending orientation.** Do not automatically put the widest end on the bed. Trace the exterior and every internal radius from layer zero upward, then use a brim to stabilize the orientation with the cleanest unsupported geometry.
 - **Treat terminal walls and stops as possible bridges.** In an axial print, a rear wall that suddenly closes an open cradle is a ceiling even when the final solid looks ordinary. Prefer co-planar floor/flange bed surfaces, gradual supported growth, a separate retainer, or another orientation that does not sacrifice critical holes.
 - **Account for output bodies explicitly.** Give every final solid a printable name, prefix and hide persisted sweep paths or wire bodies as construction geometry, and report the exact number and names of printable solids in the completion dialog.
+- **Keep exports slicer-neutral.** If runtime export is requested, use body-role filenames rather than printer, filament-slot, or colour-specific filenames. Write a separate neutral handoff manifest; do not embed Bambu plate, AMS, preset, or custom-G-code logic in the Fusion script.
 - **Assert computable geometry.** After fragile features, check the returned feature, `healthState`, `errorOrWarningMessage`, result body validity, positive volume, and expected body count/name. Add bounding-box or critical-distance assertions when they can be evaluated without brittle topology indexing.
 - **Add comments explaining the geometry**, especially an ASCII cross-section if the part has one. Future-you (or future-Claude) will need to understand the script without rerunning the interview.
 
@@ -144,7 +182,7 @@ When a destination directory has been confirmed, write the files to:
 Then tell the user:
 
 1. The script folder path and Python file path
-2. How to run it: Fusion → **Utilities** → **Scripts and Add-Ins** (`Shift+S`) → find the script in "My Scripts" → **Run**. (Fusion picks up scripts from its configured scripts folder automatically; the user should not have to add it manually.)
+2. Runtime and multi-view visual-inspection result from the autonomous runner when active; otherwise how to run it manually: Fusion → **Utilities** → **Scripts and Add-Ins** (`Shift+S`) → find the script in "My Scripts" → **Run**.
 3. A one-line summary of what to expect when it runs
 4. The exact printable-solid count, which visible or hidden bodies are construction only, and whether each solid should be exported separately
 5. A per-part print orientation based on internal geometry, plus any essential support, brim, material, seam, or paint-fill guidance
@@ -154,13 +192,13 @@ Then tell the user:
 
 When the user comes back with tweaks ("the holes are 2 mm too close to the edge", "make the wall thicker"), prefer **editing the existing script** over rewriting from scratch. The parameter block at the top of the file makes most tweaks one-line changes. Only rewrite if the geometry itself is wrong.
 
-After each material edit, run `scripts/preflight_fusion_script.py` and fix its errors. Ask the user to run the script manually in Fusion and return any traceback or unexpected result for the next iteration. Clearly distinguish static preflight success from runtime geometry validation.
+After each material edit, run `scripts/preflight_fusion_script.py` and fix its errors. When the Fusion runner is active, use the autonomous runtime loop and fix failures without a copy-and-paste round trip. Otherwise ask the user to run the script manually and return any traceback or unexpected result. Clearly distinguish static preflight success from runtime geometry validation.
 
 Before approving another full print, compare any existing exported STL/3MF against the current parameter ledger: bounding box, plate thickness, hole pitch, critical openings, body count, and modification time. Script edits do not update old exports. For uncertain mating apertures or inferred chamfers, generate a small labeled coupon before the production body.
 
 ## What this skill is NOT for
 
-- **Launching Fusion, executing scripts automatically, or directly manipulating an open document.** This skill produces standalone scripts for the user to run manually.
+- **Launching Fusion or controlling its UI.** The optional runner can execute an explicitly submitted script in an already-open design after the user starts the add-in; it does not launch Fusion or replace visual/physical fit inspection.
 - **Importing existing STEP/STL files.** Use Fusion's GUI for that.
 - **Complex assemblies with joints/constraints.** This skill is for single-component parametric models or simple multi-body printable parts. If the user wants a true multi-component assembly, warn them and offer to script the individual printable bodies unless they explicitly need assembly components.
 - **Direct surface/sculpt modeling.** The skill targets parametric solid modeling, including temporary BRep solids when appropriate, not interactive T-Spline or sculpt workflows.
@@ -190,6 +228,8 @@ See `references/fusion_api_research.md` for:
 - How to inspect the installed Autodesk Python stubs
 - Official Autodesk documentation entry points
 - Temporary BRep and boolean-operation rules
+
+See `references/printable_handoff.md` when the user wants neutral body exports for a downstream slicer project.
 
 ## Examples
 
